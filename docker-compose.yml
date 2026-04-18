@@ -9,6 +9,4 @@ services:
     environment:
       - API_PASSWORD=ep      #qui inserisci la tua password personalizzata
       - PORT=7860
-      - FLARESOLVERR_URL=http://flaresolverr:8191
       - FLARESOLVERR_TIMEOUT=30
-      - BYPARR_URL=http://byparr:8192
