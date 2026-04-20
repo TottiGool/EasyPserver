@@ -45,6 +45,7 @@ from config import (
     APP_VERSION,
     ENABLE_WARP,
     ENABLE_REMUXING,
+    WARP_EXCLUDE_DOMAINS,
 )
 from extractors.generic import GenericHLSExtractor, ExtractorError
 from services.manifest_rewriter import ManifestRewriter
@@ -362,15 +363,15 @@ class HLSProxy:
         """Periodically checks WARP status via Cloudflare trace (Universal)."""
         while True:
             try:
-                # We use the internal session to check the actual connection state
-                session = await self._get_session(url=key_url if 'key_url' in locals() else (stream_url if 'stream_url' in locals() else (url if 'url' in locals() else None)))
+                # We use the proxy session to check if the SOCKS5H proxy is working
+                session, _ = await self._get_proxy_session("https://www.cloudflare.com/cdn-cgi/trace")
                 async with session.get("https://www.cloudflare.com/cdn-cgi/trace", timeout=5) as resp:
                     if resp.status == 200:
                         text = await resp.text()
                         if "warp=on" in text:
-                            self.warp_status = "Connected"
+                            self.warp_status = "Connected (SOCKS5)"
                         else:
-                            self.warp_status = "Disconnected"
+                            self.warp_status = "Disconnected (Proxy Mode)"
                     else:
                         self.warp_status = "Error"
             except Exception:
@@ -564,6 +565,12 @@ class HLSProxy:
                     
                     os.system(f"warp-cli --accept-tos tunnel host add {base_domain} > /dev/null 2>&1")
                     os.system(f"warp-cli --accept-tos tunnel host add {domain} > /dev/null 2>&1")
+                    
+                    # In Proxy mode, we must also update the local exclusion list
+                    if base_domain not in WARP_EXCLUDE_DOMAINS:
+                        WARP_EXCLUDE_DOMAINS.append(base_domain)
+                    if domain not in WARP_EXCLUDE_DOMAINS:
+                        WARP_EXCLUDE_DOMAINS.append(domain)
                     
                     BYPASSED_WARP_DOMAINS.add(domain)
                     BYPASSED_WARP_DOMAINS.add(base_domain)
@@ -1267,6 +1274,15 @@ class HLSProxy:
                 stream_url = result["destination_url"]
                 stream_headers = result.get("request_headers", {})
                 captured_manifest = result.get("captured_manifest")
+                warp_bypass = result.get("warp_bypass", False)
+
+                # Se l'estrattore richiede il bypass di WARP, aggiungiamo il flag all'URL
+                if warp_bypass:
+                    if "?" in stream_url:
+                        stream_url += "&direct=1"
+                    else:
+                        stream_url += "?direct=1"
+                    logger.info(f"⚡ WARP Bypass forced for this stream: {stream_url[:50]}...")
 
 
             # Se redirect_stream è False, restituisci il JSON con i dettagli (stile MediaFlow)

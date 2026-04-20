@@ -52,8 +52,10 @@ if [ "$ENABLE_WARP" = "true" ]; then
          warp-cli --accept-tos add-excluded-domain cccdn.net > /dev/null 2>&1) || true
          
          
-        # Set mode to WARP (Full TUN/VPN mode)
-        warp-cli --accept-tos mode warp
+        # Set mode to Proxy (SOCKS5 mode)
+        warp-cli --accept-tos mode proxy
+        # Set proxy port to 1080
+        warp-cli --accept-tos proxy port 1080
         
         warp-cli --accept-tos connect
         

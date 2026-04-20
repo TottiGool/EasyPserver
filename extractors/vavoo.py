@@ -270,6 +270,7 @@ class VavooExtractor:
             "destination_url": resolved_url,
             "request_headers": stream_headers,
             "mediaflow_endpoint": self.mediaflow_endpoint,
+            "warp_bypass": True,
         }
 
     async def close(self):
