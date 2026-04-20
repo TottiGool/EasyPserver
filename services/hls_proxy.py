@@ -44,6 +44,7 @@ from config import (
     VERSION_MODE,
     APP_VERSION,
     ENABLE_WARP,
+    ENABLE_REMUXING,
 )
 from extractors.generic import GenericHLSExtractor, ExtractorError
 from services.manifest_rewriter import ManifestRewriter
@@ -1305,6 +1306,10 @@ class HLSProxy:
             # (e.g. "dashinripe" in URL being mistaken for a DASH manifest).
             is_mpd = ".mpd" in stream_url.lower() or "/dash/" in stream_url.lower()
             if is_mpd:
+                if MPD_MODE in ("none", "disabled"):
+                    logger.info(f"⏩ [None Mode] Serving raw MPD manifest: {stream_url}")
+                    return web.HTTPFound(location=stream_url)
+
                 if MPD_MODE == "ffmpeg" and self.ffmpeg_manager:
                     # FFmpeg transcoding mode
                     logger.info(
@@ -3383,16 +3388,20 @@ class HLSProxy:
                     None, decrypt_segment, init_content, segment_content, key_id, key
                 )
 
-            # Leggero REMUX to TS
-            ts_content = await self._remux_to_ts(combined_content)
-            if not ts_content:
-                logger.warning("⚠️ Remux failed, serving raw fMP4")
-                # Fallback: serve fMP4 if remux fails
+            # Leggero REMUX to TS (if enabled)
+            if ENABLE_REMUXING:
+                ts_content = await self._remux_to_ts(combined_content)
+                if not ts_content:
+                    logger.warning("⚠️ Remux failed, serving raw fMP4")
+                    ts_content = combined_content
+                    content_type = "video/mp4"
+                else:
+                    content_type = "video/MP2T"
+                    logger.info("⚡ Remuxed fMP4 -> TS")
+            else:
+                logger.debug("⏩ Remuxing disabled, serving raw fMP4")
                 ts_content = combined_content
                 content_type = "video/mp4"
-            else:
-                content_type = "video/MP2T"
-                logger.info("⚡ Remuxed fMP4 -> TS")
 
             # Store in cache
             self.segment_cache[cache_key] = (ts_content, time.time())
