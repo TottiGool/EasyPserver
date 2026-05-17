@@ -43,38 +43,7 @@ class VavooExtractor:
         """Restituisce un proxy casuale dalla lista."""
         return random.choice(self.proxies) if self.proxies else None
         
-    def _check_warp_bypass(self, url: str):
-        """Forces WARP bypass for specific domains within the extractor."""
-        from config import ENABLE_WARP, VERSION_MODE
-        from services.hls_proxy import BYPASSED_WARP_DOMAINS
-        import os
-        if not ENABLE_WARP or VERSION_MODE != "Full":
-            return
-        
-        try:
-            from urllib.parse import urlsplit
-            domain = urlsplit(url).netloc
-            if domain and domain not in BYPASSED_WARP_DOMAINS:
-                # Always bypass these domains for Vavoo/Mediahubmx to ensure IP consistency
-                bypass_domains = ["lokke.app", "vavoo.to", "vavoo.tv", "mediahubmx.cc"]
-                if any(d in domain.lower() for d in bypass_domains):
-                    logger.info(f"⚡ [Vavoo Bypass] Excluding {domain} from WARP...")
-                    os.system(f"warp-cli --accept-tos tunnel host add {domain} > /dev/null 2>&1")
-                    BYPASSED_WARP_DOMAINS.add(domain)
-                    # Also add base domain to global registry
-                    base_domain = ".".join(domain.split(".")[-2:])
-                    BYPASSED_WARP_DOMAINS.add(base_domain)
-                    
-                    # Small sleep to let WARP stabilize routing table
-                    import time
-                    time.sleep(1.0)
-        except:
-            pass
-    
     async def _get_session(self, url: str = None):
-        # if url:
-        #     self._check_warp_bypass(url)
-
         if self.session is None or self.session.closed:
             timeout = ClientTimeout(total=60, connect=30, sock_read=30)
             
@@ -86,7 +55,7 @@ class VavooExtractor:
                 proxy = self._get_random_proxy()
                 
             if proxy:
-                logger.info(f"Using proxy for Vavoo session: {proxy}")
+                logger.debug(f"Using proxy for Vavoo session: {proxy}")
                 connector = get_connector_for_proxy(proxy)
             else:
                 connector = TCPConnector(
@@ -163,7 +132,7 @@ class VavooExtractor:
                         if sig:
                             self._cached_sig = sig
                             self._cached_sig_ts = time.time()
-                            logger.info("Got auth signature from lokke.app")
+                            logger.debug("Got auth signature from lokke.app")
                             return sig
                     logger.warning(f"Ping attempt {attempt+1} failed: status {resp.status}")
             except Exception as e:
@@ -185,7 +154,7 @@ class VavooExtractor:
                         data = await resp.json()
                         signed = data.get("response", {}).get("signed")
                         if signed:
-                            logger.info("Got TS signature from ping2")
+                            logger.debug("Got TS signature from ping2")
                             return signed
             except Exception as e:
                 logger.warning(f"TS ping2 attempt {attempt+1} exception: {e}")
@@ -274,11 +243,13 @@ class VavooExtractor:
                 "referer": "https://vavoo.to/",
             }
 
+        stream_headers["X-EasyProxy-Disable-SSL"] = "1"
+
         return {
             "destination_url": resolved_url,
             "request_headers": stream_headers,
             "mediaflow_endpoint": self.mediaflow_endpoint,
-            "warp_bypass": True,
+            "disable_ssl": True,
         }
 
     async def close(self):
