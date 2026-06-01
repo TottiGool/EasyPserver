@@ -4,3 +4,6 @@ flaresolverr/
 byparr/
 .env
 /scratch
+/.shared_chromium_profile
+dlstreams_activity.txt
+/scripts
